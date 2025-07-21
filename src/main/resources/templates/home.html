@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Home Page</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/home.css">
+  <!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+  <div class="navbar">
+    <header>
+      <nav>
+        <a href="/home">Home</a>
+        <a href="/products">Products</a>
+        <a href="/cart">Cart</a>
+        <a href="/orders">Orders</a>
+        <a href="/profile">Profile</a>
+        <a href="/logout">Logout</a>
+      </nav>
+    </header>
+  </div>
+
+  <canvas id="gridCanvas"></canvas>
+
+  <div class="text-overlay">
+    <p id="line1" class="line1">Shop like you mean it —</p>
+    <p id="line2" class="line2">NotShop</p>
+  </div>
+
+  <!-- Profile Card Component -->
+  <div class="pc-card-wrapper" id="profileCardWrapper">
+    <section class="pc-card" id="profileCard">
+      <div class="pc-inside">
+        <div class="pc-glare"></div>
+
+        <div class="pc-content pc-avatar-content">
+          <!-- Avatar image -->
+          <img 
+            class="avatar" 
+            id="avatarImage" 
+            src="/images/avatar.png" 
+            alt="User avatar" 
+            loading="lazy"
+          />
+
+          <!-- Entire .pc-user-info is now a button -->
+          <button class="pc-user-info" id="contactTrigger" type="button" aria-label="Contact user">
+            <div class="pc-user-details">
+              <div class="pc-mini-avatar">
+                <!-- Mini avatar image -->
+                <img 
+                  id="miniAvatarImage" 
+                  src="https://i.pinimg.com/originals/18/63/06/18630643c94af31df7f3b3a116b7ebd9.jpg"
+                  alt="User mini avatar" 
+                  loading="lazy"
+                />
+              </div>
+              <div class="pc-user-text">
+                <div class="pc-handle" id="userHandle">@diablo8246</div>
+                <div class="pc-status" id="userStatus">Checking...</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <div class="pc-content">
+          <div class="pc-details">
+            <h3 id="userName">Notmod</h3>
+            <p id="userTitle">Owner</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Bounce Cards Container -->
+  <div class="bounceCardsContainer" id="bounceCardsContainer"></div>
+
+  <!-- GSAP CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
+
+  <script>
+    // Split Text Animation for multiple elements
+    function splitText(container) {
+      const text = container.textContent;
+      container.textContent = "";
+      return text.split("").map((char, i) => {
+        const span = document.createElement("span");
+        span.classList.add("split-char");
+        span.textContent = char === " " ? "\u00A0" : char;
+        container.appendChild(span);
+        return span;
+      });
+    }
+
+    function animateSplitText(elements, options = {}, onComplete) {
+      const { delay = 100, duration = 600 } = options;
+      let completedCount = 0;
+      const total = elements.length;
+
+      elements.forEach((el, i) => {
+        el.style.animationDuration = duration + "ms";
+        el.style.animationDelay = (delay * i) + "ms";
+        el.addEventListener("animationend", () => {
+          completedCount++;
+          if (completedCount === total && typeof onComplete === "function") {
+            onComplete();
+          }
+        }, { once: true });
+      });
+    }
+
+    const line1Container = document.getElementById("line1");
+    const line2Container = document.getElementById("line2");
+
+    // Animate line 1 first
+    const line1Spans = splitText(line1Container);
+
+    animateSplitText(line1Spans, { delay: 70, duration: 600 }, () => {
+      // After line 1 finishes, show line 2 and animate it
+      line2Container.style.visibility = "visible";
+      const line2Spans = splitText(line2Container);
+      animateSplitText(line2Spans, { delay: 70, duration: 600 });
+    });
+
+    // Canvas animation code
+    const canvas = document.getElementById('gridCanvas');
+    const ctx = canvas.getContext('2d');
+    let squareSize = 40;
+    let direction = "right";
+    let speed = 1;
+    let hue = 0;
+    let borderColor = "hsl(0, 100%, 70%)";
+    let hoverFillColor = "hsl(180, 100%, 70%)";
+
+    function updateColors() {
+      hue = (hue + 3) % 360;
+      borderColor = `hsl(${hue}, 100%, 70%)`;
+      hoverFillColor = `hsl(${(hue + 180) % 360}, 100%, 70%)`;
+    }
+
+    let gridOffset = { x: 0, y: 0 };
+    let hoveredSquare = null;
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    function drawGrid() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const startX = Math.floor(gridOffset.x / squareSize) * squareSize;
+      const startY = Math.floor(gridOffset.y / squareSize) * squareSize;
+
+      for (let x = startX; x < canvas.width + squareSize; x += squareSize) {
+        for (let y = startY; y < canvas.height + squareSize; y += squareSize) {
+          const squareX = x - (gridOffset.x % squareSize);
+          const squareY = y - (gridOffset.y % squareSize);
+          const gridX = Math.floor((x - startX) / squareSize);
+          const gridY = Math.floor((y - startY) / squareSize);
+
+          if (hoveredSquare && gridX === hoveredSquare.x && gridY === hoveredSquare.y) {
+            ctx.fillStyle = hoverFillColor;
+            ctx.fillRect(squareX, squareY, squareSize, squareSize);
+          }
+
+          ctx.strokeStyle = borderColor;
+          ctx.strokeRect(squareX, squareY, squareSize, squareSize);
+        }
+      }
+
+      const gradient = ctx.createRadialGradient(
+        canvas.width / 2,
+        canvas.height / 2,
+        0,
+        canvas.width / 2,
+        canvas.height / 2,
+        Math.sqrt(canvas.width ** 2 + canvas.height ** 2) / 2
+      );
+      gradient.addColorStop(0, "rgba(0, 0, 0, 0)");
+      gradient.addColorStop(1, "rgba(6,6,6,0.8)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+
+    function animate() {
+      const effectiveSpeed = Math.max(speed, 0.1);
+      switch (direction) {
+        case "right":
+          gridOffset.x = (gridOffset.x - effectiveSpeed + squareSize) % squareSize;
+          break;
+        case "left":
+          gridOffset.x = (gridOffset.x + effectiveSpeed + squareSize) % squareSize;
+          break;
+        case "up":
+          gridOffset.y = (gridOffset.y + effectiveSpeed + squareSize) % squareSize;
+          break;
+        case "down":
+          gridOffset.y = (gridOffset.y - effectiveSpeed + squareSize) % squareSize;
+          break;
+        case "diagonal":
+          gridOffset.x = (gridOffset.x - effectiveSpeed + squareSize) % squareSize;
+          gridOffset.y = (gridOffset.y - effectiveSpeed + squareSize) % squareSize;
+          break;
+      }
+
+      updateColors();
+      drawGrid();
+      requestAnimationFrame(animate);
+    }
+
+    function getMouseGridCoords(event) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = event.clientX - rect.left;
+      const mouseY = event.clientY - rect.top;
+
+      const startX = Math.floor(gridOffset.x / squareSize) * squareSize;
+      const startY = Math.floor(gridOffset.y / squareSize) * squareSize;
+
+      const hoveredX = Math.floor((mouseX + gridOffset.x - startX) / squareSize);
+      const hoveredY = Math.floor((mouseY + gridOffset.y - startY) / squareSize);
+
+      hoveredSquare = { x: hoveredX, y: hoveredY };
+    }
+
+    canvas.addEventListener("mousemove", getMouseGridCoords);
+    canvas.addEventListener("mouseleave", () => (hoveredSquare = null));
+
+    animate();
+
+    // Card script
+    const images = [
+      "https://picsum.photos/id/1018/200/200",
+      "https://picsum.photos/id/1015/200/200",
+      "https://picsum.photos/id/1016/200/200",
+      "https://picsum.photos/id/1019/200/200",
+      "https://picsum.photos/id/1020/200/200",
+    ];
+
+    const containerWidth = 400;
+    const containerHeight = 400;
+    const animationDelay = 0.5;
+    const animationStagger = 0.06;
+    const easeType = "elastic.out(1, 0.8)";
+    const transformStyles = [
+      "rotate(10deg) translate(-170px)",
+      "rotate(5deg) translate(-85px)",
+      "rotate(-3deg)",
+      "rotate(-10deg) translate(85px)",
+      "rotate(2deg) translate(170px)",
+    ];
+    const enableHover = true;
+
+    const container = document.getElementById("bounceCardsContainer");
+    container.style.width = containerWidth + "px";
+    container.style.height = containerHeight + "px";
+
+    // Create cards and append
+    images.forEach((src, i) => {
+      const card = document.createElement("div");
+      card.classList.add("card", `card-${i}`);
+      card.style.transform = transformStyles[i] || "none";
+      card.innerHTML = `<img class="image" src="${src}" alt="card-${i}"/>`;
+
+      if (enableHover) {
+        card.addEventListener("mouseenter", () => pushSiblings(i));
+        card.addEventListener("mouseleave", resetSiblings);
+      }
+
+      container.appendChild(card);
+    });
+
+    // GSAP Animation for initial scale in
+    gsap.fromTo(
+      ".card",
+      { scale: 0 },
+      {
+        scale: 1,
+        stagger: animationStagger,
+        ease: easeType,
+        delay: animationDelay,
+      }
+    );
+
+    // Helpers
+    function getNoRotationTransform(transformStr) {
+      const hasRotate = /rotate\([\s\S]*?\)/.test(transformStr);
+      if (hasRotate) {
+        return transformStr.replace(/rotate\([\s\S]*?\)/, "rotate(0deg)");
+      } else if (transformStr === "none") {
+        return "rotate(0deg)";
+      } else {
+        return `${transformStr} rotate(0deg)`;
+      }
+    }
+
+    function getPushedTransform(baseTransform, offsetX) {
+      const translateRegex = /translate\(([-0-9.]+)px\)/;
+      const match = baseTransform.match(translateRegex);
+      if (match) {
+        const currentX = parseFloat(match[1]);
+        const newX = currentX + offsetX;
+        return baseTransform.replace(translateRegex, `translate(${newX}px)`);
+      } else {
+        return baseTransform === "none"
+          ? `translate(${offsetX}px)`
+          : `${baseTransform} translate(${offsetX}px)`;
+      }
+    }
+
+    function pushSiblings(hoveredIdx) {
+      if (!enableHover) return;
+
+      images.forEach((_, i) => {
+        const cardSelector = `.card-${i}`;
+        gsap.killTweensOf(cardSelector);
+
+        const baseTransform = transformStyles[i] || "none";
+
+        if (i === hoveredIdx) {
+          const noRotation = getNoRotationTransform(baseTransform);
+          gsap.to(cardSelector, {
+            transform: noRotation,
+            duration: 0.4,
+            ease: "back.out(1.4)",
+            overwrite: "auto",
+          });
+        } else {
+          const offsetX = i < hoveredIdx ? -200 : 260;
+          const pushedTransform = getPushedTransform(baseTransform, offsetX);
+
+          const distance = Math.abs(hoveredIdx - i);
+          const delay = distance * 0.05;
+
+          gsap.to(cardSelector, {
+            transform: pushedTransform,
+            duration: 0.4,
+            ease: "back.out(1.4)",
+            delay,
+            overwrite: "auto",
+          });
+        }
+      });
+    }
+
+    function resetSiblings() {
+      if (!enableHover) return;
+
+      images.forEach((_, i) => {
+        const cardSelector = `.card-${i}`;
+        gsap.killTweensOf(cardSelector);
+        const baseTransform = transformStyles[i] || "none";
+        gsap.to(cardSelector, {
+          transform: baseTransform,
+          duration: 0.4,
+          ease: "back.out(1.4)",
+          overwrite: "auto",
+        });
+      });
+    }
+  </script>
+
+  <script src="/js/profile-card.js"></script>
+</body>
+</html>
+
