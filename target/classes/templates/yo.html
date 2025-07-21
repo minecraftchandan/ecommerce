@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Redirecting to Site...</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      background: #111;
+      overflow: hidden;
+    }
+
+    #refresh-layer {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    #game-modal {
+      position: absolute;
+      top: 10%;
+      left: 10%;
+      width: 80%;
+      height: 80%;
+      background: #222;
+      z-index: 9999;
+      border-radius: 12px;
+      box-shadow: 0 0 20px #00ff88;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      padding: 20px;
+      transition: all 0.5s ease;
+    }
+
+    h2 {
+      margin-top: 0;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-template-rows: repeat(3, 100px);
+      gap: 10px;
+      margin-top: 20px;
+    }
+
+    .cell {
+      background: #444;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 40px;
+      color: white;
+      cursor: pointer;
+      border-radius: 8px;
+    }
+
+    .cell:hover {
+      background: #666;
+    }
+
+    #status {
+      margin-top: 10px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Refresh layer -->
+  <div id="refresh-layer"></div>
+
+  <!-- Modal Game -->
+  <div id="game-modal">
+    <h2>🔄 Waking up the server...</h2>
+    <p id="message">Play Tic Tac Toe while you wait!</p>
+    <div id="board"></div>
+    <div id="status">Your move: X</div>
+  </div>
+
+  <!-- Render wake checker -->
+  <script>
+    const targetURL = "https://notmod-zrhx.onrender.com/";
+
+    async function tryRenderWake() {
+      try {
+        await fetch(targetURL, { mode: 'no-cors' });
+
+        // Server is awake, switch to redirect modal
+        document.getElementById("board").style.display = "none";
+        document.getElementById("status").style.display = "none";
+        document.querySelector("h2").textContent = "✅ Server is ready!";
+
+        let count = 2;
+        const msg = document.getElementById("message");
+        msg.textContent = `Redirecting in ${count}...`;
+
+        const countdown = setInterval(() => {
+          count--;
+          if (count >= 0) {
+            msg.textContent = `Redirecting in ${count}...`;
+          }
+          if (count < 0) {
+            clearInterval(countdown);
+            window.location.href = targetURL;
+          }
+        }, 1000);
+
+      } catch {
+        setTimeout(() => {
+          location.reload();
+        }, 3000);
+      }
+    }
+
+    tryRenderWake();
+  </script>
+
+  <!-- Tic Tac Toe Logic -->
+  <script>
+    const board = document.getElementById('board');
+    const statusText = document.getElementById('status');
+    let cells = [];
+    let currentPlayer = 'X';
+    let gameActive = true;
+
+    function checkWinnerState(boardState) {
+      const wins = [
+        [0,1,2],[3,4,5],[6,7,8],
+        [0,3,6],[1,4,7],[2,5,8],
+        [0,4,8],[2,4,6]
+      ];
+      for (const [a, b, c] of wins) {
+        if (
+          boardState[a] &&
+          boardState[a] === boardState[b] &&
+          boardState[b] === boardState[c]
+        ) {
+          return boardState[a];
+        }
+      }
+      return boardState.every(cell => cell) ? "draw" : null;
+    }
+
+    function handleClick(e) {
+      const cell = e.target;
+      const idx = cells.indexOf(cell);
+      if (!cell.textContent && gameActive && currentPlayer === 'X') {
+        cell.textContent = 'X';
+        const boardState = cells.map(cell => cell.textContent);
+        let result = checkWinnerState(boardState);
+        if (result) endGame(result);
+        else {
+          currentPlayer = 'O';
+          statusText.textContent = "Computer is thinking...";
+          setTimeout(computerMove, 200);
+        }
+      }
+    }
+
+    function endGame(winner) {
+      gameActive = false;
+      if (winner === 'draw') {
+        statusText.textContent = "😐 It's a draw!";
+      } else {
+        statusText.textContent = `🎉 ${winner === 'X' ? 'You' : 'Computer'} wins!`;
+      }
+    }
+
+    function computerMove() {
+      const boardState = cells.map(cell => cell.textContent);
+      const best = minimax(boardState, 'O');
+      if (best.index !== -1) {
+        cells[best.index].textContent = 'O';
+      }
+      let result = checkWinnerState(cells.map(cell => cell.textContent));
+      if (result) endGame(result);
+      else {
+        currentPlayer = 'X';
+        statusText.textContent = "Your move: X";
+      }
+    }
+
+    function minimax(newBoard, player) {
+      const emptyIndices = newBoard
+        .map((val, idx) => (val ? null : idx))
+        .filter(val => val !== null);
+
+      const winner = checkWinnerState(newBoard);
+      if (winner === 'X') return { score: -10 };
+      if (winner === 'O') return { score: 10 };
+      if (winner === 'draw') return { score: 0 };
+
+      let moves = [];
+
+      for (let i = 0; i < emptyIndices.length; i++) {
+        let move = {};
+        move.index = emptyIndices[i];
+        newBoard[emptyIndices[i]] = player;
+
+        if (player === 'O') {
+          let result = minimax(newBoard, 'X');
+          move.score = result.score;
+        } else {
+          let result = minimax(newBoard, 'O');
+          move.score = result.score;
+        }
+
+        newBoard[emptyIndices[i]] = '';
+        moves.push(move);
+      }
+
+      let bestMove;
+      if (player === 'O') {
+        let bestScore = -Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          if (moves[i].score > bestScore) {
+            bestScore = moves[i].score;
+            bestMove = i;
+          }
+        }
+      } else {
+        let bestScore = Infinity;
+        for (let i = 0; i < moves.length; i++) {
+          if (moves[i].score < bestScore) {
+            bestScore = moves[i].score;
+            bestMove = i;
+          }
+        }
+      }
+
+      return moves[bestMove];
+    }
+
+    function createBoard() {
+      for (let i = 0; i < 9; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.addEventListener('click', handleClick);
+        board.appendChild(cell);
+        cells.push(cell);
+      }
+    }
+
+    createBoard();
+  </script>
+
+</body>
+</html>
